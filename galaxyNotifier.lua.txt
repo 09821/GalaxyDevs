@@ -1,0 +1,1224 @@
+-- GalaxyHub - Sistema Completo de Frutas
+-- Autor: Assistente
+-- Data: 2024
+
+-- Serviços
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local StarterGui = game:GetService("StarterGui")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+-- Variáveis globais
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Configurações
+local config = {
+    aimbotEnabled = false,
+    aimbotButtonVisible = false,
+    serverHopEnabled = false,
+    autoTpWhitelist = true,
+    autoOffTpWhitelist = false,
+    autoAfkEnabled = false,
+    espEnabled = false,
+    webhook = ""
+}
+
+-- Lista de frutas válidas
+local VALID_FRUITS = {
+    -- COMMON
+    "Rocket Fruit", "Spin Fruit", "Chop Fruit", "Spring Fruit",
+    "Bomb Fruit", "Smoke Fruit", "Spike Fruit",
+    -- UNCOMMON
+    "Flame Fruit", "Ice Fruit", "Sand Fruit", "Dark Fruit",
+    "Diamond Fruit", "Light Fruit", "Ghost Fruit",
+    -- RARE
+    "Rubber Fruit", "Barrier Fruit", "Magma Fruit", "Quake Fruit",
+    "Love Fruit", "Spider Fruit", "Sound Fruit",
+    -- LEGENDARY
+    "Phoenix Fruit", "Portal Fruit", "Rumble Fruit", "Gravity Fruit",
+    "Blizzard Fruit", "Eagle Fruit", "Creation Fruit", "Pain Fruit",
+    -- MYTHICAL
+    "Dough Fruit", "Shadow Fruit", "Venom Fruit", "Control Fruit",
+    "Spirit Fruit", "Leopard Fruit", "Mammoth Fruit", "T-Rex Fruit",
+    "Kitsune Fruit", "Dragon Fruit", "Gas Fruit", "Yeti Fruit",
+    "Tiger Fruit", "Blade Fruit"
+}
+
+-- Cores por raridade
+local RARITY_COLORS = {
+    ["COMMON"] = Color3.fromRGB(200, 200, 200),
+    ["UNCOMMON"] = Color3.fromRGB(100, 255, 100),
+    ["RARE"] = Color3.fromRGB(100, 200, 255),
+    ["LEGENDARY"] = Color3.fromRGB(255, 200, 50),
+    ["MYTHICAL"] = Color3.fromRGB(255, 100, 255)
+}
+
+-- Listas do usuário
+local whitelist = {}
+local blacklist = {}
+
+-- Sistemas em execução
+local espObjects = {}
+local aimbotTarget = nil
+local aimbotConnection = nil
+local isMinimized = false
+local isDragging = false
+local dragStart = nil
+local guiPosition = nil
+local detectedFruits = {}
+
+-- Função para criar a GUI principal
+local function createMainGUI()
+    -- Tela principal
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "GalaxyHub"
+    screenGui.ResetOnSpawn = false
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    -- Frame principal
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 400, 0, 500)
+    mainFrame.Position = UDim2.new(1, -410, 0.5, -250)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    mainFrame.BorderSizePixel = 0
+    mainFrame.ClipsDescendants = true
+    mainFrame.Parent = screenGui
+    
+    -- Título arrastável
+    local titleBar = Instance.new("Frame")
+    titleBar.Name = "TitleBar"
+    titleBar.Size = UDim2.new(1, 0, 0, 40)
+    titleBar.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    titleBar.BorderSizePixel = 0
+    titleBar.Parent = mainFrame
+    
+    local titleText = Instance.new("TextLabel")
+    titleText.Name = "TitleText"
+    titleText.Size = UDim2.new(0.6, 0, 1, 0)
+    titleText.Position = UDim2.new(0, 10, 0, 0)
+    titleText.BackgroundTransparency = 1
+    titleText.Text = "Notifier Fruits"
+    titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleText.Font = Enum.Font.GothamBold
+    titleText.TextSize = 18
+    titleText.TextXAlignment = Enum.TextXAlignment.Left
+    titleText.Parent = titleBar
+    
+    -- Botões da barra de título
+    local buttonContainer = Instance.new("Frame")
+    buttonContainer.Name = "ButtonContainer"
+    buttonContainer.Size = UDim2.new(0.3, 0, 1, 0)
+    buttonContainer.Position = UDim2.new(0.7, 0, 0, 0)
+    buttonContainer.BackgroundTransparency = 1
+    buttonContainer.Parent = titleBar
+    
+    -- Botão Minimizar
+    local minimizeButton = Instance.new("TextButton")
+    minimizeButton.Name = "MinimizeButton"
+    minimizeButton.Size = UDim2.new(0.33, -2, 1, 0)
+    minimizeButton.Position = UDim2.new(0, 0, 0, 0)
+    minimizeButton.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+    minimizeButton.BorderSizePixel = 0
+    minimizeButton.Text = "_"
+    minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    minimizeButton.Font = Enum.Font.GothamBold
+    minimizeButton.TextSize = 16
+    minimizeButton.Parent = buttonContainer
+    
+    -- Botão Maximizar
+    local maximizeButton = Instance.new("TextButton")
+    maximizeButton.Name = "MaximizeButton"
+    maximizeButton.Size = UDim2.new(0.33, -2, 1, 0)
+    maximizeButton.Position = UDim2.new(0.33, 0, 0, 0)
+    maximizeButton.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+    maximizeButton.BorderSizePixel = 0
+    maximizeButton.Text = "□"
+    maximizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    maximizeButton.Font = Enum.Font.GothamBold
+    maximizeButton.TextSize = 14
+    maximizeButton.Parent = buttonContainer
+    
+    -- Botão Fechar
+    local closeButton = Instance.new("TextButton")
+    closeButton.Name = "CloseButton"
+    closeButton.Size = UDim2.new(0.33, -2, 1, 0)
+    closeButton.Position = UDim2.new(0.66, 0, 0, 0)
+    closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    closeButton.BorderSizePixel = 0
+    closeButton.Text = "X"
+    closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeButton.Font = Enum.Font.GothamBold
+    closeButton.TextSize = 14
+    closeButton.Parent = buttonContainer
+    
+    -- Abas
+    local tabsFrame = Instance.new("Frame")
+    tabsFrame.Name = "TabsFrame"
+    tabsFrame.Size = UDim2.new(1, 0, 0, 40)
+    tabsFrame.Position = UDim2.new(0, 0, 0, 40)
+    tabsFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    tabsFrame.BorderSizePixel = 0
+    tabsFrame.Parent = mainFrame
+    
+    -- Botões das abas
+    local tabButtons = {}
+    local tabNames = {"Aimbot", "Server Hop Fruits", "Esp Fruits"}
+    
+    for i, name in ipairs(tabNames) do
+        local tabButton = Instance.new("TextButton")
+        tabButton.Name = name .. "Tab"
+        tabButton.Size = UDim2.new(1/#tabNames, 0, 1, 0)
+        tabButton.Position = UDim2.new((i-1)/#tabNames, 0, 0, 0)
+        tabButton.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+        tabButton.BorderSizePixel = 0
+        tabButton.Text = name
+        tabButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+        tabButton.Font = Enum.Font.Gotham
+        tabButton.TextSize = 12
+        tabButton.Parent = tabsFrame
+        table.insert(tabButtons, tabButton)
+    end
+    
+    -- Conteúdo das abas (Frame com ScrollingFrame)
+    local contentFrame = Instance.new("Frame")
+    contentFrame.Name = "ContentFrame"
+    contentFrame.Size = UDim2.new(1, 0, 1, -80)
+    contentFrame.Position = UDim2.new(0, 0, 0, 80)
+    contentFrame.BackgroundTransparency = 1
+    contentFrame.ClipsDescendants = true
+    contentFrame.Parent = mainFrame
+    
+    -- Conteúdo da aba Aimbot
+    local aimbotScrollingFrame = Instance.new("ScrollingFrame")
+    aimbotScrollingFrame.Name = "AimbotContent"
+    aimbotScrollingFrame.Size = UDim2.new(1, 0, 1, 0)
+    aimbotScrollingFrame.Position = UDim2.new(0, 0, 0, 0)
+    aimbotScrollingFrame.BackgroundTransparency = 1
+    aimbotScrollingFrame.ScrollBarThickness = 5
+    aimbotScrollingFrame.Visible = false
+    aimbotScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 300)
+    aimbotScrollingFrame.Parent = contentFrame
+    
+    local aimbotToggle = Instance.new("TextButton")
+    aimbotToggle.Name = "AimbotToggle"
+    aimbotToggle.Size = UDim2.new(0.9, 0, 0, 40)
+    aimbotToggle.Position = UDim2.new(0.05, 0, 0, 10)
+    aimbotToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    aimbotToggle.BorderSizePixel = 0
+    aimbotToggle.Text = "Aimbot: OFF"
+    aimbotToggle.TextColor3 = Color3.fromRGB(255, 100, 100)
+    aimbotToggle.Font = Enum.Font.GothamBold
+    aimbotToggle.TextSize = 14
+    aimbotToggle.Parent = aimbotScrollingFrame
+    
+    aimbotScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, aimbotToggle.Position.Y.Offset + aimbotToggle.Size.Y.Offset + 20)
+    
+    -- Conteúdo da aba Server Hop Fruits
+    local serverHopScrollingFrame = Instance.new("ScrollingFrame")
+    serverHopScrollingFrame.Name = "ServerHopContent"
+    serverHopScrollingFrame.Size = UDim2.new(1, 0, 1, 0)
+    serverHopScrollingFrame.Position = UDim2.new(0, 0, 0, 0)
+    serverHopScrollingFrame.BackgroundTransparency = 1
+    serverHopScrollingFrame.ScrollBarThickness = 5
+    serverHopScrollingFrame.Visible = false
+    serverHopScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 600)
+    serverHopScrollingFrame.Parent = contentFrame
+    
+    -- Whitelist
+    local whitelistLabel = Instance.new("TextLabel")
+    whitelistLabel.Name = "WhitelistLabel"
+    whitelistLabel.Size = UDim2.new(0.9, 0, 0, 30)
+    whitelistLabel.Position = UDim2.new(0.05, 0, 0, 10)
+    whitelistLabel.BackgroundTransparency = 1
+    whitelistLabel.Text = "Whitelist (Nomes para buscar):"
+    whitelistLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+    whitelistLabel.Font = Enum.Font.Gotham
+    whitelistLabel.TextSize = 12
+    whitelistLabel.TextXAlignment = Enum.TextXAlignment.Left
+    whitelistLabel.Parent = serverHopScrollingFrame
+    
+    local whitelistInput = Instance.new("TextBox")
+    whitelistInput.Name = "WhitelistInput"
+    whitelistInput.Size = UDim2.new(0.85, 0, 0, 30)
+    whitelistInput.Position = UDim2.new(0.05, 0, 0, 45)
+    whitelistInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    whitelistInput.BorderSizePixel = 0
+    whitelistInput.Text = ""
+    whitelistInput.PlaceholderText = "Digite um nome e pressione Enter"
+    whitelistInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+    whitelistInput.Font = Enum.Font.Gotham
+    whitelistInput.TextSize = 12
+    whitelistInput.Parent = serverHopScrollingFrame
+    
+    local addWhitelistButton = Instance.new("TextButton")
+    addWhitelistButton.Name = "AddWhitelistButton"
+    addWhitelistButton.Size = UDim2.new(0.1, 0, 0, 30)
+    addWhitelistButton.Position = UDim2.new(0.9, 0, 0, 45)
+    addWhitelistButton.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+    addWhitelistButton.BorderSizePixel = 0
+    addWhitelistButton.Text = "+"
+    addWhitelistButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    addWhitelistButton.Font = Enum.Font.GothamBold
+    addWhitelistButton.TextSize = 16
+    addWhitelistButton.Parent = serverHopScrollingFrame
+    
+    local whitelistDisplay = Instance.new("TextLabel")
+    whitelistDisplay.Name = "WhitelistDisplay"
+    whitelistDisplay.Size = UDim2.new(0.9, 0, 0, 60)
+    whitelistDisplay.Position = UDim2.new(0.05, 0, 0, 80)
+    whitelistDisplay.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    whitelistDisplay.BorderSizePixel = 0
+    whitelistDisplay.Text = "Nenhum item na whitelist"
+    whitelistDisplay.TextColor3 = Color3.fromRGB(200, 200, 200)
+    whitelistDisplay.Font = Enum.Font.Gotham
+    whitelistDisplay.TextSize = 11
+    whitelistDisplay.TextWrapped = true
+    whitelistDisplay.Parent = serverHopScrollingFrame
+    
+    -- Blacklist
+    local blacklistLabel = Instance.new("TextLabel")
+    blacklistLabel.Name = "BlacklistLabel"
+    blacklistLabel.Size = UDim2.new(0.9, 0, 0, 30)
+    blacklistLabel.Position = UDim2.new(0.05, 0, 0, 150)
+    blacklistLabel.BackgroundTransparency = 1
+    blacklistLabel.Text = "Blacklist (Nomes para ignorar):"
+    blacklistLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+    blacklistLabel.Font = Enum.Font.Gotham
+    blacklistLabel.TextSize = 12
+    blacklistLabel.TextXAlignment = Enum.TextXAlignment.Left
+    blacklistLabel.Parent = serverHopScrollingFrame
+    
+    local blacklistInput = Instance.new("TextBox")
+    blacklistInput.Name = "BlacklistInput"
+    blacklistInput.Size = UDim2.new(0.85, 0, 0, 30)
+    blacklistInput.Position = UDim2.new(0.05, 0, 0, 185)
+    blacklistInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    blacklistInput.BorderSizePixel = 0
+    blacklistInput.Text = ""
+    blacklistInput.PlaceholderText = "Digite um nome e pressione Enter"
+    blacklistInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+    blacklistInput.Font = Enum.Font.Gotham
+    blacklistInput.TextSize = 12
+    blacklistInput.Parent = serverHopScrollingFrame
+    
+    local addBlacklistButton = Instance.new("TextButton")
+    addBlacklistButton.Name = "AddBlacklistButton"
+    addBlacklistButton.Size = UDim2.new(0.1, 0, 0, 30)
+    addBlacklistButton.Position = UDim2.new(0.9, 0, 0, 185)
+    addBlacklistButton.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+    addBlacklistButton.BorderSizePixel = 0
+    addBlacklistButton.Text = "+"
+    addBlacklistButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    addBlacklistButton.Font = Enum.Font.GothamBold
+    addBlacklistButton.TextSize = 16
+    addBlacklistButton.Parent = serverHopScrollingFrame
+    
+    local blacklistDisplay = Instance.new("TextLabel")
+    blacklistDisplay.Name = "BlacklistDisplay"
+    blacklistDisplay.Size = UDim2.new(0.9, 0, 0, 60)
+    blacklistDisplay.Position = UDim2.new(0.05, 0, 0, 220)
+    blacklistDisplay.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    blacklistDisplay.BorderSizePixel = 0
+    blacklistDisplay.Text = "Nenhum item na blacklist"
+    blacklistDisplay.TextColor3 = Color3.fromRGB(200, 200, 200)
+    blacklistDisplay.Font = Enum.Font.Gotham
+    blacklistDisplay.TextSize = 11
+    blacklistDisplay.TextWrapped = true
+    blacklistDisplay.Parent = serverHopScrollingFrame
+    
+    -- Configurações de Server Hop
+    local startServerButton = Instance.new("TextButton")
+    startServerButton.Name = "StartServerButton"
+    startServerButton.Size = UDim2.new(0.9, 0, 0, 40)
+    startServerButton.Position = UDim2.new(0.05, 0, 0, 290)
+    startServerButton.BackgroundColor3 = Color3.fromRGB(50, 100, 200)
+    startServerButton.BorderSizePixel = 0
+    startServerButton.Text = "Start Server Hop"
+    startServerButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    startServerButton.Font = Enum.Font.GothamBold
+    startServerButton.TextSize = 14
+    startServerButton.Parent = serverHopScrollingFrame
+    
+    -- AutoTp Whitelist
+    local autoTpToggle = Instance.new("TextButton")
+    autoTpToggle.Name = "AutoTpToggle"
+    autoTpToggle.Size = UDim2.new(0.9, 0, 0, 30)
+    autoTpToggle.Position = UDim2.new(0.05, 0, 0, 340)
+    autoTpToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    autoTpToggle.BorderSizePixel = 0
+    autoTpToggle.Text = "AutoTp Whitelist: ON"
+    autoTpToggle.TextColor3 = Color3.fromRGB(100, 255, 100)
+    autoTpToggle.Font = Enum.Font.Gotham
+    autoTpToggle.TextSize = 12
+    autoTpToggle.Parent = serverHopScrollingFrame
+    
+    -- AutoOFF TP Whitelist
+    local autoOffToggle = Instance.new("TextButton")
+    autoOffToggle.Name = "AutoOffToggle"
+    autoOffToggle.Size = UDim2.new(0.9, 0, 0, 30)
+    autoOffToggle.Position = UDim2.new(0.05, 0, 0, 375)
+    autoOffToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    autoOffToggle.BorderSizePixel = 0
+    autoOffToggle.Text = "AutoOFF TP Whitelist: OFF"
+    autoOffToggle.TextColor3 = Color3.fromRGB(255, 100, 100)
+    autoOffToggle.Font = Enum.Font.Gotham
+    autoOffToggle.TextSize = 12
+    autoOffToggle.Parent = serverHopScrollingFrame
+    
+    -- Auto AFK
+    local autoAfkToggle = Instance.new("TextButton")
+    autoAfkToggle.Name = "AutoAfkToggle"
+    autoAfkToggle.Size = UDim2.new(0.9, 0, 0, 30)
+    autoAfkToggle.Position = UDim2.new(0.05, 0, 0, 410)
+    autoAfkToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    autoAfkToggle.BorderSizePixel = 0
+    autoAfkToggle.Text = "Auto AFK: OFF"
+    autoAfkToggle.TextColor3 = Color3.fromRGB(255, 100, 100)
+    autoAfkToggle.Font = Enum.Font.Gotham
+    autoAfkToggle.TextSize = 12
+    autoAfkToggle.Parent = serverHopScrollingFrame
+    
+    local webhookInput = Instance.new("TextBox")
+    webhookInput.Name = "WebhookInput"
+    webhookInput.Size = UDim2.new(0.9, 0, 0, 30)
+    webhookInput.Position = UDim2.new(0.05, 0, 0, 445)
+    webhookInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    webhookInput.BorderSizePixel = 0
+    webhookInput.Text = ""
+    webhookInput.PlaceholderText = "Webhook Discord (opcional)"
+    webhookInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+    webhookInput.Font = Enum.Font.Gotham
+    webhookInput.TextSize = 12
+    webhookInput.Parent = serverHopScrollingFrame
+    
+    serverHopScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, webhookInput.Position.Y.Offset + webhookInput.Size.Y.Offset + 20)
+    
+    -- Conteúdo da aba ESP Fruits
+    local espScrollingFrame = Instance.new("ScrollingFrame")
+    espScrollingFrame.Name = "EspContent"
+    espScrollingFrame.Size = UDim2.new(1, 0, 1, 0)
+    espScrollingFrame.Position = UDim2.new(0, 0, 0, 0)
+    espScrollingFrame.BackgroundTransparency = 1
+    espScrollingFrame.ScrollBarThickness = 5
+    espScrollingFrame.Visible = false
+    espScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 400)
+    espScrollingFrame.Parent = contentFrame
+    
+    local espToggle = Instance.new("TextButton")
+    espToggle.Name = "EspToggle"
+    espToggle.Size = UDim2.new(0.9, 0, 0, 40)
+    espToggle.Position = UDim2.new(0.05, 0, 0, 10)
+    espToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    espToggle.BorderSizePixel = 0
+    espToggle.Text = "ESP Fruits: OFF"
+    espToggle.TextColor3 = Color3.fromRGB(255, 100, 100)
+    espToggle.Font = Enum.Font.GothamBold
+    espToggle.TextSize = 14
+    espToggle.Parent = espScrollingFrame
+    
+    local detectedListButton = Instance.new("TextButton")
+    detectedListButton.Name = "DetectedListButton"
+    detectedListButton.Size = UDim2.new(0.9, 0, 0, 40)
+    detectedListButton.Position = UDim2.new(0.05, 0, 0, 60)
+    detectedListButton.BackgroundColor3 = Color3.fromRGB(70, 70, 150)
+    detectedListButton.BorderSizePixel = 0
+    detectedListButton.Text = "Abrir Lista Detectada"
+    detectedListButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    detectedListButton.Font = Enum.Font.GothamBold
+    detectedListButton.TextSize = 14
+    detectedListButton.Parent = espScrollingFrame
+    
+    local tpV1Button = Instance.new("TextButton")
+    tpV1Button.Name = "TpV1Button"
+    tpV1Button.Size = UDim2.new(0.44, 0, 0, 40)
+    tpV1Button.Position = UDim2.new(0.05, 0, 0, 110)
+    tpV1Button.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+    tpV1Button.BorderSizePixel = 0
+    tpV1Button.Text = "TP Fruit v1"
+    tpV1Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tpV1Button.Font = Enum.Font.Gotham
+    tpV1Button.TextSize = 12
+    tpV1Button.Parent = espScrollingFrame
+    
+    local tpV2Button = Instance.new("TextButton")
+    tpV2Button.Name = "TpV2Button"
+    tpV2Button.Size = UDim2.new(0.44, 0, 0, 40)
+    tpV2Button.Position = UDim2.new(0.51, 0, 0, 110)
+    tpV2Button.BackgroundColor3 = Color3.fromRGB(150, 100, 50)
+    tpV2Button.BorderSizePixel = 0
+    tpV2Button.Text = "TP Fruit v2"
+    tpV2Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tpV2Button.Font = Enum.Font.Gotham
+    tpV2Button.TextSize = 12
+    tpV2Button.Parent = espScrollingFrame
+    
+    espScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, tpV1Button.Position.Y.Offset + tpV1Button.Size.Y.Offset + 20)
+    
+    -- Mostrar primeira aba
+    aimbotScrollingFrame.Visible = true
+    tabButtons[1].BackgroundColor3 = Color3.fromRGB(70, 70, 80)
+    
+    -- Adicionar à PlayerGui
+    screenGui.Parent = PlayerGui
+    
+    return {
+        screenGui = screenGui,
+        mainFrame = mainFrame,
+        titleBar = titleBar,
+        titleText = titleText,
+        minimizeButton = minimizeButton,
+        maximizeButton = maximizeButton,
+        closeButton = closeButton,
+        tabButtons = tabButtons,
+        contentFrame = contentFrame,
+        aimbotScrollingFrame = aimbotScrollingFrame,
+        aimbotToggle = aimbotToggle,
+        serverHopScrollingFrame = serverHopScrollingFrame,
+        whitelistInput = whitelistInput,
+        addWhitelistButton = addWhitelistButton,
+        whitelistDisplay = whitelistDisplay,
+        blacklistInput = blacklistInput,
+        addBlacklistButton = addBlacklistButton,
+        blacklistDisplay = blacklistDisplay,
+        startServerButton = startServerButton,
+        autoTpToggle = autoTpToggle,
+        autoOffToggle = autoOffToggle,
+        autoAfkToggle = autoAfkToggle,
+        webhookInput = webhookInput,
+        espScrollingFrame = espScrollingFrame,
+        espToggle = espToggle,
+        detectedListButton = detectedListButton,
+        tpV1Button = tpV1Button,
+        tpV2Button = tpV2Button
+    }
+end
+
+-- Sistema de ESP
+local function createESP(obj, displayName, rarity)
+    if not obj or not obj.Parent then return end
+    
+    -- Remover ESP antigo se existir
+    if espObjects[obj] then
+        espObjects[obj]:Destroy()
+        espObjects[obj] = nil
+    end
+    
+    local primaryPart = nil
+    if obj:IsA("Model") then
+        primaryPart = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+    elseif obj:IsA("BasePart") then
+        primaryPart = obj
+    end
+    
+    if not primaryPart then return end
+    
+    -- Criar BillboardGui
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "FruitESP"
+    billboard.Adornee = primaryPart
+    billboard.Size = UDim2.new(0, 200, 0, 60)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Enabled = true
+    billboard.Parent = primaryPart
+    
+    -- Nome da fruta
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+    nameLabel.Position = UDim2.new(0, 0, 0, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = displayName
+    nameLabel.TextColor3 = RARITY_COLORS[rarity] or Color3.fromRGB(255, 255, 255)
+    nameLabel.TextScaled = true
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextStrokeTransparency = 0
+    nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    nameLabel.Parent = billboard
+    
+    -- Distância
+    local distanceLabel = Instance.new("TextLabel")
+    distanceLabel.Size = UDim2.new(1, 0, 0.5, 0)
+    distanceLabel.Position = UDim2.new(0, 0, 0.5, 0)
+    distanceLabel.BackgroundTransparency = 1
+    distanceLabel.Text = "0m"
+    distanceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    distanceLabel.TextScaled = true
+    distanceLabel.Font = Enum.Font.Gotham
+    distanceLabel.TextStrokeTransparency = 0
+    distanceLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    distanceLabel.Parent = billboard
+    
+    espObjects[obj] = billboard
+    
+    -- Adicionar à lista de frutas detectadas
+    if not detectedFruits[obj] then
+        detectedFruits[obj] = {
+            name = displayName,
+            rarity = rarity,
+            object = obj
+        }
+    end
+end
+
+local function removeAllESP()
+    for obj, esp in pairs(espObjects) do
+        if esp then
+            esp:Destroy()
+        end
+    end
+    espObjects = {}
+    detectedFruits = {}
+end
+
+local function scanForFruits()
+    if not config.espEnabled then return end
+    
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if (obj:IsA("Model") or obj:IsA("Tool")) and not espObjects[obj] then
+            local objName = obj.Name
+            
+            -- Verificar se é uma fruta conhecida
+            for _, fruitName in ipairs(VALID_FRUITS) do
+                if objName == fruitName then
+                    -- Determinar raridade
+                    local rarity = "COMMON"
+                    if objName:find("Mythical") or objName:find("Dragon") or objName:find("Kitsune") then
+                        rarity = "MYTHICAL"
+                    elseif objName:find("Legendary") or objName:find("Gravity") or objName:find("Portal") then
+                        rarity = "LEGENDARY"
+                    elseif objName:find("Rare") or objName:find("Magma") or objName:find("Quake") then
+                        rarity = "RARE"
+                    elseif objName:find("Uncommon") or objName:find("Flame") or objName:find("Ice") then
+                        rarity = "UNCOMMON"
+                    end
+                    
+                    createESP(obj, objName, rarity)
+                    break
+                end
+            end
+        end
+    end
+end
+
+-- Sistema de Aimbot
+local function createAimbotButton()
+    local aimbotButtonGui = Instance.new("ScreenGui")
+    aimbotButtonGui.Name = "AimbotButton"
+    aimbotButtonGui.ResetOnSpawn = false
+    aimbotButtonGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    local button = Instance.new("TextButton")
+    button.Name = "AimbotToggleButton"
+    button.Size = UDim2.new(0, 100, 0, 50)
+    button.Position = UDim2.new(0.5, -50, 0.5, -25)
+    button.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    button.BorderSizePixel = 0
+    button.Text = "Aimbot\nOFF"
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.Font = Enum.Font.GothamBold
+    button.TextSize = 12
+    button.TextWrapped = true
+    button.Parent = aimbotButtonGui
+    
+    aimbotButtonGui.Parent = PlayerGui
+    
+    -- Sistema de arrastar
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+    
+    button.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = button.Position
+        end
+    end)
+    
+    button.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            button.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+    
+    button.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    -- Toggle Aimbot
+    local aimbotActive = false
+    button.MouseButton1Click:Connect(function()
+        aimbotActive = not aimbotActive
+        if aimbotActive then
+            button.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+            button.Text = "Aimbot\nON"
+        else
+            button.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            button.Text = "Aimbot\nOFF"
+        end
+    end)
+    
+    return aimbotButtonGui
+end
+
+-- Sistema de Server Hop
+local function saveConfig()
+    local configData = {
+        aimbotEnabled = config.aimbotEnabled,
+        serverHopEnabled = config.serverHopEnabled,
+        autoTpWhitelist = config.autoTpWhitelist,
+        autoOffTpWhitelist = config.autoOffTpWhitelist,
+        autoAfkEnabled = config.autoAfkEnabled,
+        espEnabled = config.espEnabled,
+        webhook = config.webhook,
+        whitelist = whitelist,
+        blacklist = blacklist
+    }
+    
+    -- Em um executor real, você salvaria em um arquivo
+    -- Aqui apenas simulamos o salvamento
+    print("Configurações salvas:", HttpService:JSONEncode(configData))
+end
+
+local function loadConfig()
+    -- Em um executor real, você carregaria de um arquivo
+    -- Aqui apenas simulamos o carregamento
+    print("Carregando configurações...")
+end
+
+local function sendDiscordNotification(fruitName, jobId)
+    if config.webhook == "" then return end
+    
+    local message = {
+        content = "@everyone @here @⭐ | VIP Silver\nNova fruta encontrada, pelo radar GalaxyScripts",
+        embeds = {{
+            title = "🍎 Fruta Detectada!",
+            fields = {
+                {name = "Job Id mobile📱:", value = tostring(jobId), inline = true},
+                {name = "Job Id PC💻:", value = tostring(jobId), inline = true},
+                {name = "Players in server👤👤:", value = "Detectando...", inline = false},
+                {name = "Link job id💻📱🆔:", value = "[Clique for The Server](https://www.roblox.com/games/...)", inline = false},
+                {name = "Date and time⏳:", value = os.date("%Y-%m-%d %H:%M:%S"), inline = true},
+                {name = "Fruit(s)🍎📊:", value = fruitName, inline = false}
+            },
+            color = 0x00FF00,
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        }}
+    }
+    
+    -- Em um executor real, você faria uma requisição HTTP
+    print("Notificação Discord enviada para:", config.webhook)
+end
+
+-- GUI de Lista Detectada
+local function createDetectedListGUI()
+    local listGui = Instance.new("ScreenGui")
+    listGui.Name = "DetectedListGUI"
+    listGui.ResetOnSpawn = false
+    listGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Size = UDim2.new(0, 300, 0, 400)
+    mainFrame.Position = UDim2.new(0.5, -150, 0.5, -200)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Parent = listGui
+    
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 40)
+    title.Position = UDim2.new(0, 0, 0, 0)
+    title.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    title.BorderSizePixel = 0
+    title.Text = "Frutas Detectadas"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 16
+    title.Parent = mainFrame
+    
+    local closeButton = Instance.new("TextButton")
+    closeButton.Size = UDim2.new(0, 40, 0, 40)
+    closeButton.Position = UDim2.new(1, -40, 0, 0)
+    closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    closeButton.BorderSizePixel = 0
+    closeButton.Text = "X"
+    closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeButton.Font = Enum.Font.GothamBold
+    closeButton.TextSize = 14
+    closeButton.Parent = mainFrame
+    
+    local scrollingFrame = Instance.new("ScrollingFrame")
+    scrollingFrame.Size = UDim2.new(1, -10, 1, -50)
+    scrollingFrame.Position = UDim2.new(0, 5, 0, 45)
+    scrollingFrame.BackgroundTransparency = 1
+    scrollingFrame.ScrollBarThickness = 5
+    scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scrollingFrame.Parent = mainFrame
+    
+    local function updateList()
+        for _, child in ipairs(scrollingFrame:GetChildren()) do
+            if child:IsA("Frame") then
+                child:Destroy()
+            end
+        end
+        
+        local yOffset = 5
+        for _, fruitData in pairs(detectedFruits) do
+            local fruitFrame = Instance.new("Frame")
+            fruitFrame.Size = UDim2.new(1, -10, 0, 50)
+            fruitFrame.Position = UDim2.new(0, 5, 0, yOffset)
+            fruitFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+            fruitFrame.BorderSizePixel = 0
+            fruitFrame.Parent = scrollingFrame
+            
+            local fruitName = Instance.new("TextLabel")
+            fruitName.Size = UDim2.new(0.7, 0, 0.5, 0)
+            fruitName.Position = UDim2.new(0, 5, 0, 5)
+            fruitName.BackgroundTransparency = 1
+            fruitName.Text = fruitData.name
+            fruitName.TextColor3 = RARITY_COLORS[fruitData.rarity] or Color3.fromRGB(255, 255, 255)
+            fruitName.Font = Enum.Font.Gotham
+            fruitName.TextSize = 12
+            fruitName.TextXAlignment = Enum.TextXAlignment.Left
+            fruitName.Parent = fruitFrame
+            
+            local rarityLabel = Instance.new("TextLabel")
+            rarityLabel.Size = UDim2.new(0.3, 0, 0.5, 0)
+            rarityLabel.Position = UDim2.new(0.7, 0, 0, 5)
+            rarityLabel.BackgroundTransparency = 1
+            rarityLabel.Text = fruitData.rarity
+            rarityLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+            rarityLabel.Font = Enum.Font.Gotham
+            rarityLabel.TextSize = 10
+            rarityLabel.TextXAlignment = Enum.TextXAlignment.Right
+            rarityLabel.Parent = fruitFrame
+            
+            yOffset = yOffset + 55
+        end
+        
+        scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, yOffset)
+    end
+    
+    -- Atualizar lista periodicamente
+    local updateConnection
+    updateConnection = RunService.RenderStepped:Connect(function()
+        updateList()
+    end)
+    
+    closeButton.MouseButton1Click:Connect(function()
+        updateConnection:Disconnect()
+        listGui:Destroy()
+    end)
+    
+    listGui.Parent = PlayerGui
+    return listGui
+end
+
+-- Sistema de Teleporte
+local function teleportToFruitV1(fruitObj)
+    if not fruitObj or not fruitObj.Parent then return end
+    
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return end
+    
+    local targetPosition
+    if fruitObj:IsA("Model") then
+        local primaryPart = fruitObj.PrimaryPart or fruitObj:FindFirstChildWhichIsA("BasePart")
+        if primaryPart then
+            targetPosition = primaryPart.Position
+        end
+    elseif fruitObj:IsA("BasePart") then
+        targetPosition = fruitObj.Position
+    end
+    
+    if targetPosition then
+        humanoidRootPart.CFrame = CFrame.new(targetPosition + Vector3.new(0, 3, 0))
+    end
+end
+
+local function teleportToFruitV2(fruitObj)
+    if not fruitObj or not fruitObj.Parent then return end
+    
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local humanoid = character:FindFirstChild("Humanoid")
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not humanoidRootPart then return end
+    
+    local targetPosition
+    if fruitObj:IsA("Model") then
+        local primaryPart = fruitObj.PrimaryPart or fruitObj:FindFirstChildWhichIsA("BasePart")
+        if primaryPart then
+            targetPosition = primaryPart.Position
+        end
+    elseif fruitObj:IsA("BasePart") then
+        targetPosition = fruitObj.Position
+    end
+    
+    if not targetPosition then return end
+    
+    -- Movimento em zigzag no ar
+    local startTime = tick()
+    local duration = 2 -- segundos
+    local startPos = humanoidRootPart.Position
+    
+    while tick() - startTime < duration do
+        local t = (tick() - startTime) / duration
+        local offset = Vector3.new(
+            math.sin(t * math.pi * 5) * 5,  -- Movimento lateral
+            t * 20,  -- Subindo
+            math.cos(t * math.pi * 5) * 5   -- Movimento frontal
+        )
+        
+        local targetCFrame = CFrame.new(startPos:Lerp(targetPosition, t) + offset)
+        humanoidRootPart.CFrame = targetCFrame
+        
+        RunService.RenderStepped:Wait()
+    end
+    
+    -- Posição final
+    humanoidRootPart.CFrame = CFrame.new(targetPosition + Vector3.new(0, 3, 0))
+end
+
+-- Função principal de inicialização
+local function initialize()
+    -- Criar GUI principal
+    local gui = createMainGUI()
+    
+    -- Sistema de arrastar
+    gui.titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDragging = true
+            dragStart = input.Position
+            guiPosition = gui.mainFrame.Position
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            gui.mainFrame.Position = UDim2.new(
+                guiPosition.X.Scale,
+                guiPosition.X.Offset + delta.X,
+                guiPosition.Y.Scale,
+                guiPosition.Y.Offset + delta.Y
+            )
+        end
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDragging = false
+        end
+    end)
+    
+    -- Botões da barra de título
+    gui.minimizeButton.MouseButton1Click:Connect(function()
+        isMinimized = true
+        gui.contentFrame.Visible = false
+        gui.mainFrame.Size = UDim2.new(0, 400, 0, 40)
+    end)
+    
+    gui.maximizeButton.MouseButton1Click:Connect(function()
+        isMinimized = false
+        gui.contentFrame.Visible = true
+        gui.mainFrame.Size = UDim2.new(0, 400, 0, 500)
+    end)
+    
+    gui.closeButton.MouseButton1Click:Connect(function()
+        gui.screenGui:Destroy()
+        removeAllESP()
+    end)
+    
+    -- Sistema de abas
+    for i, tabButton in ipairs(gui.tabButtons) do
+        tabButton.MouseButton1Click:Connect(function()
+            -- Esconder todas as abas
+            gui.aimbotScrollingFrame.Visible = false
+            gui.serverHopScrollingFrame.Visible = false
+            gui.espScrollingFrame.Visible = false
+            
+            -- Resetar cores dos botões
+            for _, btn in ipairs(gui.tabButtons) do
+                btn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+            end
+            
+            -- Mostrar aba selecionada
+            if i == 1 then
+                gui.aimbotScrollingFrame.Visible = true
+            elseif i == 2 then
+                gui.serverHopScrollingFrame.Visible = true
+            elseif i == 3 then
+                gui.espScrollingFrame.Visible = true
+            end
+            
+            tabButton.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
+        end)
+    end
+    
+    -- Sistema Aimbot
+    local aimbotButtonGui = nil
+    gui.aimbotToggle.MouseButton1Click:Connect(function()
+        config.aimbotEnabled = not config.aimbotEnabled
+        
+        if config.aimbotEnabled then
+            gui.aimbotToggle.Text = "Aimbot: ON"
+            gui.aimbotToggle.TextColor3 = Color3.fromRGB(100, 255, 100)
+            
+            -- Criar botão arrastável
+            if not aimbotButtonGui then
+                aimbotButtonGui = createAimbotButton()
+            end
+        else
+            gui.aimbotToggle.Text = "Aimbot: OFF"
+            gui.aimbotToggle.TextColor3 = Color3.fromRGB(255, 100, 100)
+            
+            -- Remover botão
+            if aimbotButtonGui then
+                aimbotButtonGui:Destroy()
+                aimbotButtonGui = nil
+            end
+        end
+    end)
+    
+    -- Sistema Whitelist/Blacklist
+    local function updateWhitelistDisplay()
+        if #whitelist == 0 then
+            gui.whitelistDisplay.Text = "Nenhum item na whitelist"
+        else
+            gui.whitelistDisplay.Text = "Whitelist:\n" .. table.concat(whitelist, ", ")
+        end
+    end
+    
+    local function updateBlacklistDisplay()
+        if #blacklist == 0 then
+            gui.blacklistDisplay.Text = "Nenhum item na blacklist"
+        else
+            gui.blacklistDisplay.Text = "Blacklist:\n" .. table.concat(blacklist, ", ")
+        end
+    end
+    
+    gui.whitelistInput.FocusLost:Connect(function(enterPressed)
+        if enterPressed and gui.whitelistInput.Text ~= "" then
+            table.insert(whitelist, gui.whitelistInput.Text)
+            gui.whitelistInput.Text = ""
+            updateWhitelistDisplay()
+            saveConfig()
+        end
+    end)
+    
+    gui.addWhitelistButton.MouseButton1Click:Connect(function()
+        if gui.whitelistInput.Text ~= "" then
+            table.insert(whitelist, gui.whitelistInput.Text)
+            gui.whitelistInput.Text = ""
+            updateWhitelistDisplay()
+            saveConfig()
+        end
+    end)
+    
+    gui.blacklistInput.FocusLost:Connect(function(enterPressed)
+        if enterPressed and gui.blacklistInput.Text ~= "" then
+            table.insert(blacklist, gui.blacklistInput.Text)
+            gui.blacklistInput.Text = ""
+            updateBlacklistDisplay()
+            saveConfig()
+        end
+    end)
+    
+    gui.addBlacklistButton.MouseButton1Click:Connect(function()
+        if gui.blacklistInput.Text ~= "" then
+            table.insert(blacklist, gui.blacklistInput.Text)
+            gui.blacklistInput.Text = ""
+            updateBlacklistDisplay()
+            saveConfig()
+        end
+    end)
+    
+    -- Sistema Server Hop
+    gui.autoTpToggle.MouseButton1Click:Connect(function()
+        config.autoTpWhitelist = not config.autoTpWhitelist
+        if config.autoTpWhitelist then
+            gui.autoTpToggle.Text = "AutoTp Whitelist: ON"
+            gui.autoTpToggle.TextColor3 = Color3.fromRGB(100, 255, 100)
+        else
+            gui.autoTpToggle.Text = "AutoTp Whitelist: OFF"
+            gui.autoTpToggle.TextColor3 = Color3.fromRGB(255, 100, 100)
+        end
+        saveConfig()
+    end)
+    
+    gui.autoOffToggle.MouseButton1Click:Connect(function()
+        config.autoOffTpWhitelist = not config.autoOffTpWhitelist
+        if config.autoOffTpWhitelist then
+            gui.autoOffToggle.Text = "AutoOFF TP Whitelist: ON"
+            gui.autoOffToggle.TextColor3 = Color3.fromRGB(100, 255, 100)
+        else
+            gui.autoOffToggle.Text = "AutoOFF TP Whitelist: OFF"
+            gui.autoOffToggle.TextColor3 = Color3.fromRGB(255, 100, 100)
+        end
+        saveConfig()
+    end)
+    
+    gui.autoAfkToggle.MouseButton1Click:Connect(function()
+        config.autoAfkEnabled = not config.autoAfkEnabled
+        if config.autoAfkEnabled then
+            gui.autoAfkToggle.Text = "Auto AFK: ON"
+            gui.autoAfkToggle.TextColor3 = Color3.fromRGB(100, 255, 100)
+        else
+            gui.autoAfkToggle.Text = "Auto AFK: OFF"
+            gui.autoAfkToggle.TextColor3 = Color3.fromRGB(255, 100, 100)
+        end
+        saveConfig()
+    end)
+    
+    gui.webhookInput.FocusLost:Connect(function()
+        config.webhook = gui.webhookInput.Text
+        saveConfig()
+    end)
+    
+    gui.startServerButton.MouseButton1Click:Connect(function()
+        config.serverHopEnabled = not config.serverHopEnabled
+        if config.serverHopEnabled then
+            gui.startServerButton.Text = "Stop Server Hop"
+            gui.startServerButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            print("Server Hop iniciado...")
+            saveConfig()
+        else
+            gui.startServerButton.Text = "Start Server Hop"
+            gui.startServerButton.BackgroundColor3 = Color3.fromRGB(50, 100, 200)
+            print("Server Hop parado...")
+        end
+    end)
+    
+    -- Sistema ESP
+    gui.espToggle.MouseButton1Click:Connect(function()
+        config.espEnabled = not config.espEnabled
+        
+        if config.espEnabled then
+            gui.espToggle.Text = "ESP Fruits: ON"
+            gui.espToggle.TextColor3 = Color3.fromRGB(100, 255, 100)
+            print("ESP ativado")
+            
+            -- Iniciar scan periódico
+            local espConnection
+            espConnection = RunService.Heartbeat:Connect(function()
+                scanForFruits()
+            end)
+            
+            -- Armazenar conexão para desligar depois
+            gui.espToggle:SetAttribute("ESPConnection", espConnection)
+        else
+            gui.espToggle.Text = "ESP Fruits: OFF"
+            gui.espToggle.TextColor3 = Color3.fromRGB(255, 100, 100)
+            print("ESP desativado")
+            
+            -- Parar scan e remover ESPs
+            local espConnection = gui.espToggle:GetAttribute("ESPConnection")
+            if espConnection then
+                espConnection:Disconnect()
+            end
+            removeAllESP()
+        end
+        saveConfig()
+    end)
+    
+    -- Lista Detectada
+    local detectedListGUI = nil
+    gui.detectedListButton.MouseButton1Click:Connect(function()
+        if detectedListGUI then
+            detectedListGUI:Destroy()
+            detectedListGUI = nil
+        else
+            detectedListGUI = createDetectedListGUI()
+        end
+    end)
+    
+    -- Teleportes
+    gui.tpV1Button.MouseButton1Click:Connect(function()
+        -- Teleportar para a primeira fruta detectada
+        for fruitObj, _ in pairs(detectedFruits) do
+            teleportToFruitV1(fruitObj)
+            break
+        end
+    end)
+    
+    local tpV2Active = false
+    gui.tpV2Button.MouseButton1Click:Connect(function()
+        tpV2Active = not tpV2Active
+        
+        if tpV2Active then
+            gui.tpV2Button.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+            gui.tpV2Button.Text = "TP Fruit v2\n(Ativo)"
+            
+            -- Teleportar para a primeira fruta com V2
+            for fruitObj, _ in pairs(detectedFruits) do
+                teleportToFruitV2(fruitObj)
+                break
+            end
+        else
+            gui.tpV2Button.BackgroundColor3 = Color3.fromRGB(150, 100, 50)
+            gui.tpV2Button.Text = "TP Fruit v2"
+        end
+    end)
+    
+    -- Atualizar ESPs
+    RunService.Heartbeat:Connect(function()
+        for obj, esp in pairs(espObjects) do
+            if obj and obj.Parent and esp and esp.Adornee then
+                local character = LocalPlayer.Character
+                if character then
+                    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+                    if humanoidRootPart then
+                        local distance = (humanoidRootPart.Position - esp.Adornee.Position).Magnitude
+                        local distanceLabel = esp:FindFirstChild("TextLabel") and esp:FindFirstChild("TextLabel"):FindFirstChild("TextLabel")
+                        if distanceLabel then
+                            distanceLabel.Text = string.format("%.1fm", distance)
+                        end
+                    end
+                end
+            else
+                espObjects[obj] = nil
+                if esp then esp:Destroy() end
+            end
+        end
+    end)
+    
+    -- Carregar configurações
+    loadConfig()
+    updateWhitelistDisplay()
+    updateBlacklistDisplay()
+    
+    print("✅ GalaxyHub carregado com sucesso!")
+    print("📋 Funcionalidades disponíveis:")
+    print("   • Aimbot com botão arrastável")
+    print("   • Server Hop com Whitelist/Blacklist")
+    print("   • ESP de Frutas com raridades")
+    print("   • Sistema de notificação Discord")
+    print("   • Teleportes V1 e V2")
+    print("   • Configurações automáticas salvas")
+    
+    return gui
+end
+
+-- Inicializar
+local success, err = pcall(initialize)
+if not success then
+    warn("❌ Erro ao inicializar GalaxyHub:", err)
+end
